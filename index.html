@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>永雏塔菲出道五周年全国应援打卡地图</title>
+  <link rel="icon" type="image/png" href="./favicon.png" />
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@4.9.0/map/js/china.js"></script>
+  <style>
+    :root{
+      --bg1:#ff9fbe;
+      --bg2:#ffe8a8;
+      --card:#fff7fb;
+      --pink:#ff5f9f;
+      --pink2:#e50057;
+      --red:#a5062c;
+      --ink:#5b1930;
+      --muted:#946175;
+      --line:#ffd4e4;
+      --shadow:0 20px 60px rgba(164,0,72,.18);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink)}
+    body{
+      min-height:100vh;
+      background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='190' viewBox='0 0 260 190'%3E%3Cg fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg stroke='%23e50057' stroke-opacity='.20' stroke-width='2.4' stroke-dasharray='1 8'%3E%3Ccircle cx='58' cy='58' r='25'/%3E%3Ccircle cx='58' cy='58' r='10'/%3E%3Cpath d='M58 18v-13M58 111V98M18 58H5M111 58H98M29 29l-10-10M97 97l-10-10M87 29l10-10M19 97l10-10'/%3E%3C/g%3E%3Cg stroke='%2330a46c' stroke-opacity='.20' stroke-width='2.2' stroke-dasharray='1 7'%3E%3Cpath d='M171 67c-18-17-1-39 15-24 16-15 33 7 15 24 18 17 1 39-15 24-16 15-33-7-15-24z'/%3E%3Cpath d='M186 91c-2 13-8 22-20 28'/%3E%3C/g%3E%3Cg stroke='%23ffb000' stroke-opacity='.18' stroke-width='2' stroke-dasharray='1 7'%3E%3Ccircle cx='226' cy='150' r='18'/%3E%3Ccircle cx='226' cy='150' r='7'/%3E%3Cpath d='M226 122v-9M226 187v-9M198 150h-9M263 150h-9M206 130l-7-7M246 170l-7-7M246 130l7-7M199 177l7-7'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"),
+        radial-gradient(circle at 12px 12px, rgba(255,255,255,.35) 0 4px, transparent 5px) 0 0/38px 38px,
+        linear-gradient(180deg,var(--bg1) 0%,#ffc0d1 54%,var(--bg2) 100%);
+      overflow:hidden;
+    }
+    body::before{
+      content:"";
+      position:fixed;inset:0;pointer-events:none;
+      background:
+        linear-gradient(105deg, rgba(255,255,255,.22), transparent 38% 62%, rgba(255,255,255,.18));
+      mix-blend-mode:soft-light;
+    }
+    .app{height:100vh;display:grid;grid-template-rows:auto 1fr;gap:14px;padding:18px;position:relative;z-index:1}
+    header{
+      border-radius:26px;
+      background:rgba(255,247,251,.80);
+      backdrop-filter: blur(10px);
+      box-shadow:var(--shadow);
+      padding:16px 18px;
+      display:flex;align-items:center;justify-content:space-between;gap:14px;
+      border:1px solid rgba(255,255,255,.7);
+    }
+    .brand{display:flex;align-items:center;gap:12px;min-width:0}
+    h1{font-size:clamp(20px,3vw,34px);line-height:1.1;margin:0;color:#ff2d83;text-shadow:0 3px 0 rgba(255,255,255,.88),0 10px 22px rgba(229,0,87,.16);letter-spacing:.08em}
+    .sub{margin-top:6px;font-weight:700;color:var(--pink2);font-size:14px}
+    .toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    .search,.panel-back{
+      border:2px solid var(--line);
+      background:#fff;
+      color:var(--pink2);
+      border-radius:999px;
+      padding:9px 12px;
+      font-weight:800;
+      box-shadow:0 8px 20px rgba(229,0,87,.10);
+    }
+    .search{outline:none;min-width:190px}
+    .panel-back{cursor:pointer;white-space:nowrap}
+    .panel-back[hidden]{display:none}
+    .main{min-height:0;display:grid;grid-template-columns:1fr auto;gap:14px;position:relative}
+    .map-card{
+      min-width:0;min-height:0;position:relative;
+      border-radius:30px;background:rgba(255,247,251,.86);
+      box-shadow:var(--shadow);border:1px solid rgba(255,255,255,.75);
+      overflow:hidden;
+    }
+    #map{height:100%;min-height:520px}
+    .hint{
+      position:absolute;left:18px;bottom:18px;z-index:2;
+      max-width:min(520px,calc(100% - 36px));
+      background:#fff;border:2px dashed var(--pink);border-radius:20px;
+      padding:12px 14px;color:var(--pink2);font-weight:800;box-shadow:0 12px 30px rgba(229,0,87,.13);
+    }
+    .loading{
+      position:absolute;inset:0;display:grid;place-items:center;
+      font-weight:900;color:var(--pink2);font-size:18px;background:rgba(255,247,251,.72);
+    }
+    .panel{
+      width:min(420px,calc(100vw - 36px));
+      height:100%;
+      border-radius:30px;
+      background:rgba(255,247,251,.95);
+      box-shadow:var(--shadow);
+      border:1px solid rgba(255,255,255,.85);
+      overflow:hidden;
+      transform:translateX(0);
+      transition:.25s ease;
+      display:flex;flex-direction:column;
+    }
+    .panel.empty{width:350px}
+    .panel-head{
+      padding:18px 18px 14px;
+      background:linear-gradient(135deg,#fff,#ffe0ec);
+      border-bottom:1px solid var(--line);
+      display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+    }
+    .panel-title{font-size:24px;font-weight:950;color:var(--pink2)}
+    .panel-meta{margin-top:6px;color:var(--muted);font-weight:800}
+    .panel-body{padding:14px 16px 18px;overflow:auto}
+    .mall{
+      background:white;border:2px solid var(--line);border-radius:18px;
+      padding:14px;margin:0 0 12px;box-shadow:0 10px 22px rgba(229,0,87,.08)
+    }
+    .mall h3{margin:0 0 8px;color:var(--red);font-size:18px}
+    .kv{display:grid;grid-template-columns:76px 1fr;gap:6px 10px;font-size:14px;line-height:1.55}
+    .k{color:var(--muted);font-weight:900}
+    .v{font-weight:750}
+    .tag{
+      display:inline-flex;align-items:center;gap:4px;
+      background:#fff0f6;color:var(--pink2);border:1px solid var(--line);
+      border-radius:999px;padding:5px 9px;margin-top:9px;font-size:12px;font-weight:900
+    }
+    .empty-state{
+      padding:28px 20px;text-align:center;color:var(--muted);font-weight:800;line-height:1.8
+    }
+    .city-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;justify-content:center}
+    .city-chip{
+      border:1px solid var(--line);background:#fff;color:var(--pink2);
+      border-radius:999px;padding:6px 10px;font-weight:900;cursor:pointer
+    }
+    .tooltip{min-width:220px;max-width:320px}
+    .tooltip .t-title{font-weight:950;color:#e50057;font-size:16px;margin-bottom:6px}
+    .tooltip ul{padding-left:18px;margin:6px 0 0}
+    .tooltip li{margin:3px 0}
+    @media (max-width: 900px){
+      body{overflow:auto}
+      .app{min-height:100vh;height:auto}
+      .main{grid-template-columns:1fr}
+      #map{height:62vh;min-height:460px}
+      .panel,.panel.empty{width:100%;height:auto;max-height:none}
+      header{align-items:flex-start;flex-direction:column}
+      .toolbar{justify-content:flex-start}
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <div>
+        <h1>永雏塔菲出道五周年<br/>全国应援打卡地图</h1>
+        <div class="sub">鼠标悬停看商场，点击城市看详细位置与播放时间</div>
+      </div>
+    </div>
+    <div class="toolbar">
+      <input id="search" class="search" placeholder="搜索城市或商场，如 上海 / in77" />
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="map-card">
+      <div id="map"></div>
+      <div class="hint" id="hint">提示：地图支持拖动与滚轮缩放。</div>
+      <div class="loading" id="loading">地图加载中…</div>
+    </section>
+
+    <aside class="panel empty" id="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title" id="panelTitle">选择一个城市</div>
+          <div class="panel-meta" id="panelMeta">当前共 24 个城市有打卡点</div>
+        </div>
+        <button class="panel-back" id="backBtn" type="button" hidden>返回全部</button>
+      </div>
+      <div class="panel-body" id="panelBody">
+        <div class="empty-state">
+          在地图上悬停城市标点可预览商场；点击城市标点后，详情会显示在这里。
+          <div class="city-list" id="cityList"></div>
+        </div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script>
+// 按海报中可辨识的内容录入；少数商场名/点位名建议发布前人工校对一次。
+const CHECKIN_DATA = {
+  '上海': {
+    coord:[121.4737,31.2304],
+    malls:[
+      {name:'上海百联ZX创趣场', positions:['入口格栅屏','南立面户外竖屏','电梯厅屏','中庭小屏','户外大屏'], date:'2026.6.22-2026.6.28', time:'10:00-22:00'},
+      {name:'上海宝乐汇印象城', positions:['1号门外立面'], date:'2026.6.24-2026.6.26', time:'10:00-22:00'}
+    ]
+  },
+  '重庆': {
+    coord:[106.5516,29.5630],
+    malls:[{name:'重庆方圆LIVE', positions:['B1 潮街中庭'], date:'2026.6.26', time:'12:00-22:00'}]
+  },
+  '广州': {
+    coord:[113.2644,23.1291],
+    malls:[
+      {name:'广州时尚天河广场', positions:['9号口'], date:'2026.6.20-2026.6.26', time:'10:00-22:00'},
+      {name:'广州地王广场', positions:['中庭大屏','负二层中庭电子屏','东口上方电子屏'], date:'2026.6.26-2026.6.28', time:'6.26 10:00-20:30；6.27 10:00-15:00、20:30-22:00；6.28 10:00-13:00、20:30-22:00'},
+      {name:'广州动漫星城', positions:['西区负二层 LED 大屏'], date:'2026.6.22-2026.6.28', time:'12:00-22:00'}
+    ]
+  },
+  '深圳': {
+    coord:[114.0579,22.5431],
+    malls:[
+      {name:'深圳次元小镇 bitcity', positions:['室内LED大屏','地铁口登陆屏','地铁口双电视屏','次元方柱屏'], date:'2026.6.26', time:'10:00-22:00', note:'有线下打卡点'},
+      {name:'深圳新白马·次元9号', positions:['入口折角屏正面','外区左上侧P5屏','中庭透明屏'], date:'2026.6.26', time:'10:00-22:00'}
+    ]
+  },
+  '苏州': {
+    coord:[120.5853,31.2989],
+    malls:[
+      {name:'苏州万科美好', positions:['1F外广场'], date:'2026.6.26', time:'10:00-22:00'},
+      {name:'苏州地铁', positions:['1、3号线东方之门站；2号线广济南路站；4号线南门站。站台层流媒体电子屏'], date:'2026.6.22-2026.6.28', time:'根据地铁营运时间'},
+      {name:'苏州星悦汇', positions:['大门口格栅屏','中庭大屏'], date:'2026.6.20-2026.6.26', time:'10:00-22:00', note:'有线下无料'},
+      {name:'龙湖苏州时尚水岸星悦荟', positions:['外场3D大屏'], date:'2026.6.26', time:'18:00-22:00'}
+    ]
+  },
+  '南京': {
+    coord:[118.7969,32.0603],
+    malls:[{name:'南京锦创书城珠江路店', positions:["外景门头屏"], date:'2026.6.26', time:'10:00-21:00'}]
+  },
+  '北京': {
+    coord:[116.4074,39.9042],
+    malls:[
+      {name:'北京海淀区BOM嘻番里', positions:['1L入口'], date:'2026.6.20-2026.6.26', time:'10:30-21:00'},
+      {name:'北京昌平区超极合生汇', positions:['室外中庭'], date:'2026.6.26-2026.6.28', time:'10:00-22:00'}
+    ]
+  },
+  '武汉': {
+    coord:[114.3054,30.5928],
+    malls:[{name:'武汉汉口STAY·汉荟商业', positions:['3F中庭'], date:'2026.6.26', time:'10:00-22:00'}]
+  },
+  '成都': {
+    coord:[104.0668,30.5728],
+    malls:[{name:'成都武侯大悦城', positions:['室外中庭'], date:'2026.6.26-2026.6.28', time:'10:00-22:00'}]
+  },
+  '长沙': {
+    coord:[112.9388,28.2282],
+    malls:[{name:'长沙芙蓉天街', positions:['外屏','内屏'], date:'2026.6.26', time:'10:00-22:00'}]
+  },
+  '南宁': {
+    coord:[108.3669,22.8170],
+    malls:[{name:'南宁升喜朝阳里', positions:['商场主入口外屏'], date:'2026.6.25-2026.6.27', time:'6.25 11:00-22:00；6.26-6.27 11:00-22:30', note:'有线下无料'}]
+  },
+  '贵阳': {
+    coord:[106.6302,26.6470],
+    malls:[{name:'花果园购物中心', positions:['1L中心广场'], date:'2026.6.26', time:'11:00-20:00'}]
+  },
+  '郑州': {
+    coord:[113.6254,34.7466],
+    malls:[{name:'郑州TK360广场', positions:['一楼连廊大屏','二楼西厅大屏','三楼西厅活动屏','场内广告机L1-L5','三楼丘丘传媒大屏','七楼西厅活动屏'], date:'2026.6.26-2026.6.28', time:'一楼/广告机/三楼丘丘/七楼 10:00-22:00；二楼/三楼西厅 11:00-21:00', note:'有线下无料'}]
+  },
+  '杭州': {
+    coord:[120.1551,30.2741],
+    malls:[{name:'杭州湖滨银泰in77', positions:['C2区西4门2层中庭'], date:'2026.6.26-2026.6.28', time:'10:00-22:00'}]
+  },
+  '福州': {
+    coord:[119.2965,26.0745],
+    malls:[{name:'福州旗山公园', positions:['摩天轮投影'], date:'2026.6.26', time:'19:30-19:50'}]
+  },
+  '济南': {
+    coord:[117.1201,36.6512],
+    malls:[{name:'济南印象城', positions:['1号门外广场'], date:'2026.6.26', time:'10:00-12:00；13:30-22:00'}]
+  },
+  '合肥': {
+    coord:[117.2272,31.8206],
+    malls:[{name:'合肥绿地GX360', positions:['商场1F中庭大屏'], date:'2026.6.26', time:'10:00-21:30'}]
+  },
+  '南昌': {
+    coord:[115.8582,28.6820],
+    malls:[{name:'南昌赣电九方购物中心', positions:['1号门外大屏'], date:'2026.6.26', time:'18:00-22:00'}]
+  },
+  '沈阳': {
+    coord:[123.4315,41.8057],
+    malls:[{name:'铁西区北一路万达广场', positions:['1号门外'], date:'2026.6.26', time:'9:30-21:30'}]
+  },
+  '兰州': {
+    coord:[103.8343,36.0611],
+    malls:[{name:'兰州城关万达广场', positions:['二号厅'], date:'2026.6.26', time:'10:00-22:00'}]
+  },
+  '廊坊': {
+    coord:[116.6838,39.5383],
+    malls:[{name:'廊坊三河富达购物广场', positions:['室外大屏'], date:'2026.6.26', time:'9:00-12:00；14:00-21:00'}]
+  },
+  '哈尔滨': {
+    coord:[126.6424,45.7560],
+    malls:[{name:'哈尔滨红博中央公园', positions:['公园大屏'], date:'2026.6.26', time:'9:30-21:30'}]
+  },
+  '西安': {
+    coord:[108.9398,34.3416],
+    malls:[{name:'西安上林天地', positions:['上林路×世纪大道十字路口3D大屏'], date:'2026.6.26', time:'18:00-22:00'}]
+  },
+  '西宁': {
+    coord:[101.7782,36.6171],
+    malls:[{name:'西宁力盟商业巷步行街', positions:['GAP广场室外大屏'], date:'2026.6.26-2026.6.27', time:'10:00-21:30'}]
+  }
+};
+
+const $ = (id) => document.getElementById(id);
+const cityNames = Object.keys(CHECKIN_DATA);
+$('panelMeta').textContent = `当前共 ${cityNames.length} 个城市有打卡点`;
+$('cityList').innerHTML = cityNames.map(renderCityChip).join('');
+
+function normalizeName(name=''){
+  return String(name)
+    .replace(/(市|省|地区|盟|自治州|特别行政区|壮族自治区|回族自治区|维吾尔自治区|自治区)$/,'')
+    .replace(/^内蒙古$/,'内蒙古')
+    .trim();
+}
+function escapeHtml(str=''){
+  return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+}
+function hasFreebie(city){
+  return CHECKIN_DATA[city]?.malls.some(m => /无料|领取/.test(m.note || ''));
+}
+function hasOfflineCheckin(city){
+  return CHECKIN_DATA[city]?.malls.some(m => /线下打卡点/.test(m.note || ''));
+}
+function cityBadges(city){
+  return `${hasFreebie(city) ? ' ✨' : ''}${hasOfflineCheckin(city) ? ' 📝' : ''}`;
+}
+function cityDisplayName(city){
+  return `${city}${cityBadges(city)}`;
+}
+function mapCityDisplayName(city){
+  return cityDisplayName(city).replace(/\s+/g, '');
+}
+function renderCityChip(city){
+  const label = `${escapeHtml(city)}${cityBadges(city)}`;
+  return `<button class="city-chip" data-city="${escapeHtml(city)}">${label}</button>`;
+}
+
+const MAP_LABEL_OVERRIDES = {
+  '北京': {position:'top', distance:8},
+  '廊坊': {position:'bottom', distance:8},
+  '苏州': {position:'top', distance:8},
+  '南京': {position:'bottom', distance:8},
+  '上海': {position:'right', distance:8},
+  '广州': {position:'top', distance:8},
+  '深圳': {position:'bottom', distance:8},
+  '南宁': {position:'left', distance:8},
+  '合肥': {position:'left', distance:8}
+};
+function mapLabelOverride(city){
+  return MAP_LABEL_OVERRIDES[city] ? {label: MAP_LABEL_OVERRIDES[city]} : {};
+}
+function cityTooltip(city){
+  const item = CHECKIN_DATA[city];
+  if(!item) return '';
+  const malls = item.malls.map(m => `<li>${escapeHtml(m.name)}</li>`).join('');
+  return `<div class="tooltip"><div class="t-title">${escapeHtml(city)} · ${item.malls.length} 个点位</div><ul>${malls}</ul><div style="margin-top:8px;color:#946175">点击查看详情</div></div>`;
+}
+function openPanel(city){
+  const item = CHECKIN_DATA[city];
+  if(!item) return;
+  $('panel').classList.remove('empty');
+  $('backBtn').hidden = false;
+  $('panelTitle').textContent = city;
+  $('panelMeta').textContent = `${item.malls.length} 个可打卡商场 / 点位`;
+  $('panelBody').innerHTML = item.malls.map(m => `
+    <article class="mall">
+      <h3>${escapeHtml(m.name)}</h3>
+      <div class="kv">
+        <div class="k">具体位置</div><div class="v">${m.positions.map(escapeHtml).join('、')}</div>
+        <div class="k">日期</div><div class="v">${escapeHtml(m.date)}</div>
+        <div class="k">时间</div><div class="v">${escapeHtml(m.time)}</div>
+      </div>
+      ${m.note ? `<div class="tag">✨ ${escapeHtml(m.note)}</div>` : ''}
+    </article>
+  `).join('');
+}
+function emptyPanel(){
+  $('panel').classList.add('empty');
+  $('backBtn').hidden = true;
+  $('panelTitle').textContent = '选择一个城市';
+  $('panelMeta').textContent = `当前共 ${cityNames.length} 个城市有打卡点`;
+  $('panelBody').innerHTML = `<div class="empty-state">
+    在地图上悬停城市标点可预览商场；点击城市标点后，详情会显示在这里。
+    <div class="city-list">${cityNames.map(renderCityChip).join('')}</div>
+  </div>`;
+}
+
+const CITY_PROVINCES = {
+  '上海':'上海',
+  '重庆':'重庆',
+  '广州':'广东',
+  '深圳':'广东',
+  '苏州':'江苏',
+  '南京':'江苏',
+  '北京':'北京',
+  '武汉':'湖北',
+  '成都':'四川',
+  '长沙':'湖南',
+  '南宁':'广西',
+  '贵阳':'贵州',
+  '郑州':'河南',
+  '杭州':'浙江',
+  '福州':'福建',
+  '济南':'山东',
+  '合肥':'安徽',
+  '南昌':'江西',
+  '沈阳':'辽宁',
+  '兰州':'甘肃',
+  '廊坊':'河北',
+  '哈尔滨':'黑龙江',
+  '西安':'陕西',
+  '西宁':'青海'
+};
+
+function buildProvinceRegionData(){
+  const provinceCities = new Map();
+
+  cityNames.forEach(city => {
+    const province = CITY_PROVINCES[city];
+    if(!province) return;
+    if(!provinceCities.has(province)) provinceCities.set(province, []);
+    provinceCities.get(province).push(city);
+  });
+
+  return Array.from(provinceCities, ([province, cities]) => {
+    return {
+      name: province,
+      cities,
+      value: cities.length,
+      itemStyle: {
+        areaColor:'#ffeaf2',
+        borderColor:'rgba(255,155,192,.55)',
+        borderWidth:.9,
+        shadowBlur:0,
+        shadowColor:'rgba(229,0,87,.26)'
+      },
+      emphasis: {
+        itemStyle: {
+          areaColor:'#ffdce9'
+        }
+      }
+    };
+  });
+}
+
+function buildPointData(){
+  return cityNames.map(city => ({
+    name: city,
+    city,
+    value: [...CHECKIN_DATA[city].coord, CHECKIN_DATA[city].malls.length],
+    symbolSize: Math.max(3.5, Math.min(9.5, (CHECKIN_DATA[city].malls.length * 6 + 8) / 3)),
+    itemStyle:{color:'#e50057', shadowBlur:12, shadowColor:'rgba(229,0,87,.35)'},
+    ...mapLabelOverride(city)
+  }));
+}
+
+function buildHitAreaData(pointData){
+  return pointData.map(({name, city, value}) => ({name, city, value}));
+}
+
+function provinceTooltip(province, cities){
+  const cityList = cities.map(city => `<li>${escapeHtml(city)}</li>`).join('');
+  return `<div class="tooltip"><div class="t-title">${escapeHtml(province)} · ${cities.length} 个打卡城市</div><ul>${cityList}</ul><div style="margin-top:8px;color:#946175">点击城市标点查看详情</div></div>`;
+}
+
+function tooltipFormatter(params){
+  const city = params.data?.city || normalizeName(params.name);
+  if(CHECKIN_DATA[city]) return cityTooltip(city);
+  if(params.data?.cities?.length) return provinceTooltip(params.name || '', params.data.cities);
+  return `${escapeHtml(params.name || '')}<br/><span style="color:#946175">暂无打卡点</span>`;
+}
+
+function showCityTip(chart, city){
+  const cityIndex = chart.__pointIndex?.get(city);
+  if(cityIndex !== undefined){
+    chart.dispatchAction({type:'showTip', seriesIndex:1, dataIndex:cityIndex});
+  }
+}
+
+function initChart(){
+  if(typeof echarts.getMap !== 'function' || !echarts.getMap('china')){
+    throw new Error('ECharts 中国地图脚本未加载');
+  }
+  const chart = echarts.init($('map'), null, {renderer:'canvas'});
+  const provinceRegionData = buildProvinceRegionData();
+  const pointData = buildPointData();
+  const hitAreaData = buildHitAreaData(pointData);
+  const pointIndex = new Map(pointData.map((item, index) => [item.city, index]));
+
+  const option = {
+    backgroundColor:'transparent',
+    tooltip:{
+      trigger:'item',
+      borderWidth:0,
+      backgroundColor:'rgba(255,255,255,.96)',
+      extraCssText:'box-shadow:0 14px 35px rgba(160,0,72,.18);border-radius:14px;padding:12px;',
+      formatter:tooltipFormatter
+    },
+    geo:{
+      map:'china',
+      roam:true,
+      zoom:1.18,
+      scaleLimit:{min:.8,max:8},
+      regions:provinceRegionData,
+      itemStyle:{areaColor:'#fffafd',borderColor:'#ffb6d0',borderWidth:1},
+      emphasis:{label:{show:false},itemStyle:{areaColor:'#fff0f6'}},
+      select:{disabled:true}
+    },
+    series:[
+      {
+        name:'省级区划',
+        type:'map',
+        map:'china',
+        geoIndex:0,
+        data:provinceRegionData,
+        selectedMode:false,
+        label:{show:false},
+        itemStyle:{areaColor:'#fffafd',borderColor:'#ffb6d0',borderWidth:1},
+        emphasis:{label:{show:false},itemStyle:{areaColor:'#fff0f6'}},
+        z:1,
+        tooltip:{show:true}
+      },
+      {
+        name:'打卡城市',
+        type:'effectScatter',
+        coordinateSystem:'geo',
+        data:pointData,
+        rippleEffect:{period:3,scale:3,brushType:'stroke'},
+        label:{show:true,formatter:(params) => mapCityDisplayName(params.data?.city || params.name),position:'right',fontWeight:900,color:'#e50057',textBorderColor:'#fff',textBorderWidth:3},
+        z:8,
+        tooltip:{show:true},
+        emphasis:{scale:true}
+      },
+      {
+        name:'城市交互热区',
+        type:'scatter',
+        coordinateSystem:'geo',
+        data:hitAreaData,
+        symbol:'circle',
+        symbolSize:30,
+        itemStyle:{color:'rgba(229,0,87,.001)', opacity:1},
+        emphasis:{disabled:true},
+        cursor:'pointer',
+        z:12,
+        tooltip:{show:true}
+      }
+    ]
+  };
+
+  chart.setOption(option);
+  chart.__pointIndex = pointIndex;
+  chart.on('click', (params) => {
+    const city = params.data?.city || normalizeName(params.name);
+    if(CHECKIN_DATA[city]) openPanel(city);
+  });
+  window.addEventListener('resize', () => chart.resize());
+  $('loading').style.display = 'none';
+  $('hint').style.display = 'none';
+
+  return chart;
+}
+
+(async function main(){
+  try{
+    const chart = initChart();
+
+    $('search').addEventListener('input', (e) => {
+      const q = e.target.value.trim().toLowerCase();
+      if(!q) return;
+      const city = cityNames.find(c =>
+        c.toLowerCase().includes(q) ||
+        CHECKIN_DATA[c].malls.some(m => m.name.toLowerCase().includes(q))
+      );
+      if(city){
+        openPanel(city);
+        showCityTip(chart, city);
+      }
+    });
+
+    document.body.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-city]');
+      if(btn) openPanel(btn.dataset.city);
+    });
+    $('backBtn').onclick = emptyPanel;
+  }catch(err){
+    $('loading').innerHTML = `地图加载失败：${escapeHtml(err.message)}<br><small>请检查 ECharts 中国地图脚本是否加载成功。</small>`;
+  }
+})();
+</script>
+</body>
+</html>
