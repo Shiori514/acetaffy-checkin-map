@@ -6,7 +6,6 @@
   <title>永雏塔菲出道五周年全国应援打卡地图</title>
   <link rel="icon" type="image/png" href="./favicon.png" />
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/echarts@4.9.0/map/js/china.js"></script>
   <style>
     :root{
       --bg1:#ff9fbe;
@@ -473,10 +472,31 @@ function showCityTip(chart, city){
   }
 }
 
-function initChart(){
-  if(typeof echarts.getMap !== 'function' || !echarts.getMap('china')){
-    throw new Error('ECharts 中国地图脚本未加载');
+const CHINA_MAP_NAME = 'amap-china';
+const CHINA_GEOJSON_URL = '/api/amap/china-geojson';
+
+async function fetchChinaGeoJson(){
+  const response = await fetch(CHINA_GEOJSON_URL, {headers:{Accept:'application/json'}});
+  let payload = null;
+  try{
+    payload = await response.json();
+  }catch(_err){
+    payload = null;
   }
+
+  if(!response.ok){
+    throw new Error(payload?.error || `高德边界数据接口请求失败（HTTP ${response.status}）`);
+  }
+  if(payload?.type !== 'FeatureCollection' || !Array.isArray(payload.features)){
+    throw new Error('高德边界数据格式不正确');
+  }
+  return payload;
+}
+
+async function initChart(){
+  const chinaGeoJson = await fetchChinaGeoJson();
+  echarts.registerMap(CHINA_MAP_NAME, chinaGeoJson);
+
   const chart = echarts.init($('map'), null, {renderer:'canvas'});
   const provinceRegionData = buildProvinceRegionData();
   const pointData = buildPointData();
@@ -493,11 +513,12 @@ function initChart(){
       formatter:tooltipFormatter
     },
     geo:{
-      map:'china',
+      map:CHINA_MAP_NAME,
       roam:true,
       zoom:1.18,
       scaleLimit:{min:.8,max:8},
       regions:provinceRegionData,
+      label:{show:false},
       itemStyle:{areaColor:'#fffafd',borderColor:'#ffb6d0',borderWidth:1},
       emphasis:{label:{show:false},itemStyle:{areaColor:'#fff0f6'}},
       select:{disabled:true}
@@ -506,7 +527,7 @@ function initChart(){
       {
         name:'省级区划',
         type:'map',
-        map:'china',
+        map:CHINA_MAP_NAME,
         geoIndex:0,
         data:provinceRegionData,
         selectedMode:false,
@@ -558,7 +579,7 @@ function initChart(){
 
 (async function main(){
   try{
-    const chart = initChart();
+    const chart = await initChart();
 
     $('search').addEventListener('input', (e) => {
       const q = e.target.value.trim().toLowerCase();
@@ -579,7 +600,7 @@ function initChart(){
     });
     $('backBtn').onclick = emptyPanel;
   }catch(err){
-    $('loading').innerHTML = `地图加载失败：${escapeHtml(err.message)}<br><small>请检查 ECharts 中国地图脚本是否加载成功。</small>`;
+    $('loading').innerHTML = `地图加载失败：${escapeHtml(err.message)}<br><small>请检查 Cloudflare Pages 环境变量 AMAP_KEY / AMAP_SECRET，以及 /api/amap/china-geojson 函数。</small>`;
   }
 })();
 </script>
