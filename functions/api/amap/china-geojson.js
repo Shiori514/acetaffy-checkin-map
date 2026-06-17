@@ -3,17 +3,25 @@ const CHINA_ADCODE = '100000';
 const R2_BINDING_NAME = 'AMAP_GEOJSON_BUCKET';
 const R2_GEOJSON_KEY = 'amap/china-geojson.json';
 const R2_META_KEY = 'amap/china-geojson-meta.json';
+const R2_SOUTH_CHINA_SEA_LINES_KEY = 'amap/south-china-sea-ten-dash-lines.json';
+const R2_SOUTH_CHINA_SEA_LINES_META_KEY = 'amap/south-china-sea-ten-dash-lines-meta.json';
 const SOURCE_REFRESH_INTERVAL_SECONDS = 60 * 60 * 24;
 const REFRESH_ERROR_BACKOFF_SECONDS = 60 * 60;
 const EDGE_CACHE_SECONDS = 60 * 60;
 const BROWSER_CACHE_SECONDS = 60 * 5;
+const SOUTH_CHINA_SEA_FILTER_BOUNDS = {
+  minLng:105,
+  maxLng:127,
+  minLat:3,
+  maxLat:27
+};
 
 export async function onRequest(context){
   if(context.request.method !== 'GET'){
     return json({error:'Method Not Allowed'}, 405, {Allow:'GET'});
   }
 
-  const cacheKey = new Request(new URL(context.request.url).origin + '/api/amap/china-geojson?v=2');
+  const cacheKey = new Request(new URL(context.request.url).origin + '/api/amap/china-geojson?v=3');
   const cache = typeof caches !== 'undefined' ? caches.default : null;
 
   try{
@@ -46,11 +54,13 @@ async function getGeoJsonWithR2Cache(context, bucket){
     readR2Json(bucket, R2_META_KEY)
   ]);
 
-  if(cachedGeoJson && isFresh(meta?.checkedAt, SOURCE_REFRESH_INTERVAL_SECONDS)){
+  const needsSouthChinaSeaLines = !hasSouthChinaSeaLinesPayload(cachedGeoJson);
+
+  if(cachedGeoJson && !needsSouthChinaSeaLines && isFresh(meta?.checkedAt, SOURCE_REFRESH_INTERVAL_SECONDS)){
     return {geoJson:cachedGeoJson, cacheStatus:'r2-hit'};
   }
 
-  if(cachedGeoJson && isFresh(meta?.nextRetryAt, 0)){
+  if(cachedGeoJson && !needsSouthChinaSeaLines && isFresh(meta?.nextRetryAt, 0)){
     return {geoJson:cachedGeoJson, cacheStatus:'r2-stale-backoff'};
   }
 
@@ -68,18 +78,32 @@ async function getGeoJsonWithR2Cache(context, bucket){
         lastError:null,
         refreshIntervalSeconds:SOURCE_REFRESH_INTERVAL_SECONDS
       });
+      await writeSouthChinaSeaLinesMeta(bucket, cachedGeoJson.southChinaSeaLines, {
+        sourceHash,
+        checkedAt:now,
+        storedAt:meta?.southChinaSeaLinesStoredAt || meta?.storedAt || now,
+        unchanged:true
+      });
       return {geoJson:cachedGeoJson, cacheStatus:'r2-revalidated-unchanged'};
     }
 
     await bucket.put(R2_GEOJSON_KEY, JSON.stringify(nextGeoJson), {
       httpMetadata:{contentType:'application/json; charset=utf-8'}
     });
+    await writeSouthChinaSeaLines(bucket, nextGeoJson.southChinaSeaLines, {
+      sourceHash,
+      checkedAt:now,
+      storedAt:now,
+      unchanged:false
+    });
     await writeR2Meta(bucket, {
       sourceHash,
       checkedAt:now,
       storedAt:now,
+      southChinaSeaLinesStoredAt:now,
       generatedAt:nextGeoJson.generatedAt,
       featureCount:nextGeoJson.features?.length || 0,
+      southChinaSeaLineCount:nextGeoJson.southChinaSeaLines?.features?.length || 0,
       warningCount:nextGeoJson.warnings?.length || 0,
       nextRetryAt:null,
       lastError:null,
@@ -114,10 +138,11 @@ async function buildChinaGeoJson(key, secret){
   const country = await fetchDistrict(key, secret, {
     keywords:CHINA_ADCODE,
     subdistrict:1,
-    extensions:'base',
+    extensions:'all',
     offset:100
   });
-  const provinces = country.districts?.[0]?.districts || [];
+  const countryDistrict = country.districts?.[0] || null;
+  const provinces = countryDistrict?.districts || [];
   if(!provinces.length){
     throw new Error('AMap did not return province list for China');
   }
@@ -162,6 +187,7 @@ async function buildChinaGeoJson(key, secret){
     source:'amap',
     generatedAt:new Date().toISOString(),
     refreshIntervalSeconds:SOURCE_REFRESH_INTERVAL_SECONDS,
+    southChinaSeaLines:buildSouthChinaSeaLines(countryDistrict),
     warnings,
     features
   };
@@ -241,6 +267,32 @@ async function writeR2Meta(bucket, meta){
   });
 }
 
+async function writeSouthChinaSeaLines(bucket, lines, meta){
+  if(!lines) return;
+
+  await Promise.all([
+    bucket.put(R2_SOUTH_CHINA_SEA_LINES_KEY, JSON.stringify(lines), {
+      httpMetadata:{contentType:'application/json; charset=utf-8'}
+    }),
+    writeSouthChinaSeaLinesMeta(bucket, lines, meta)
+  ]);
+}
+
+async function writeSouthChinaSeaLinesMeta(bucket, lines, meta){
+  if(!lines) return;
+
+  await bucket.put(R2_SOUTH_CHINA_SEA_LINES_META_KEY, JSON.stringify({
+    ...meta,
+    generatedAt:lines.generatedAt,
+    featureCount:lines.features?.length || 0,
+    source:lines.source,
+    extraction:lines.extraction,
+    refreshIntervalSeconds:SOURCE_REFRESH_INTERVAL_SECONDS
+  }), {
+    httpMetadata:{contentType:'application/json; charset=utf-8'}
+  });
+}
+
 function isFresh(value, ttlSeconds){
   const timestamp = Date.parse(value || '');
   if(!Number.isFinite(timestamp)) return false;
@@ -248,9 +300,16 @@ function isFresh(value, ttlSeconds){
   return Date.now() - timestamp < ttlSeconds * 1000;
 }
 
+function hasSouthChinaSeaLinesPayload(payload){
+  return payload?.southChinaSeaLines?.type === 'FeatureCollection' &&
+    Array.isArray(payload.southChinaSeaLines.features);
+}
+
 async function hashGeoJsonSource(geoJson){
   const sourceText = stableStringify({
+    hashVersion:2,
     features:geoJson.features || [],
+    southChinaSeaLines:geoJson.southChinaSeaLines?.features || [],
     warnings:geoJson.warnings || []
   });
   const bytes = new TextEncoder().encode(sourceText);
@@ -270,6 +329,128 @@ function stableStringify(value){
     }).join(',')}}`;
   }
   return JSON.stringify(value);
+}
+
+function buildSouthChinaSeaLines(countryDistrict){
+  const generatedAt = new Date().toISOString();
+  const analyzedParts = polylineToLineParts(countryDistrict?.polyline)
+    .map((coordinates, index) => ({
+      coordinates,
+      index,
+      metrics:lineMetrics(coordinates)
+    }));
+  const lineParts = analyzedParts
+    .filter(part => isSouthChinaSeaDashCandidate(part.metrics));
+
+  return {
+    type:'FeatureCollection',
+    name:'amap-south-china-sea-ten-dash-lines',
+    source:'amap',
+    extraction:'country-district-polyline',
+    sourceDistrict:{
+      name:countryDistrict?.name || '中国',
+      adcode:countryDistrict?.adcode || CHINA_ADCODE,
+      level:countryDistrict?.level || 'country'
+    },
+    generatedAt,
+    rawPartCount:analyzedParts.length,
+    candidateCount:lineParts.length,
+    filterBounds:SOUTH_CHINA_SEA_FILTER_BOUNDS,
+    features:lineParts.map(part => ({
+      type:'Feature',
+      id:`south-china-sea-line-${part.index}`,
+      properties:{
+        name:'南海十段线',
+        source:'amap',
+        sourcePartIndex:part.index,
+        bbox:part.metrics.bbox,
+        pointCount:part.metrics.pointCount,
+        pathLength:Number(part.metrics.pathLength.toFixed(6))
+      },
+      geometry:{
+        type:'LineString',
+        coordinates:part.coordinates
+      }
+    }))
+  };
+}
+
+function polylineToLineParts(polyline){
+  return String(polyline || '')
+    .split('|')
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map(part => part
+      .split(';')
+      .map(parseLngLat)
+      .filter(Boolean)
+    )
+    .filter(coordinates => coordinates.length >= 2);
+}
+
+function lineMetrics(coordinates){
+  let minLng = Infinity;
+  let maxLng = -Infinity;
+  let minLat = Infinity;
+  let maxLat = -Infinity;
+  let pathLength = 0;
+
+  coordinates.forEach(([lng, lat], index) => {
+    minLng = Math.min(minLng, lng);
+    maxLng = Math.max(maxLng, lng);
+    minLat = Math.min(minLat, lat);
+    maxLat = Math.max(maxLat, lat);
+    if(index > 0){
+      const [prevLng, prevLat] = coordinates[index - 1];
+      pathLength += Math.hypot(lng - prevLng, lat - prevLat);
+    }
+  });
+
+  const first = coordinates[0];
+  const last = coordinates[coordinates.length - 1];
+  const closeDistance = Math.hypot(first[0] - last[0], first[1] - last[1]);
+  const width = maxLng - minLng;
+  const height = maxLat - minLat;
+  const diagonal = Math.hypot(width, height);
+
+  return {
+    bbox:[minLng, minLat, maxLng, maxLat],
+    width,
+    height,
+    diagonal,
+    pathLength,
+    pointCount:coordinates.length,
+    closed:closeDistance < 0.05
+  };
+}
+
+function isSouthChinaSeaDashCandidate(metrics){
+  const [minLng, minLat, maxLng, maxLat] = metrics.bbox;
+  const bounds = SOUTH_CHINA_SEA_FILTER_BOUNDS;
+  const intersectsFilterBounds =
+    maxLng >= bounds.minLng &&
+    minLng <= bounds.maxLng &&
+    maxLat >= bounds.minLat &&
+    minLat <= bounds.maxLat;
+  if(!intersectsFilterBounds) return false;
+
+  const inMainSouthChinaSea =
+    minLng >= 105 &&
+    maxLng <= 123.8 &&
+    minLat >= 3 &&
+    maxLat <= 24.8;
+  const inTaiwanEastDash =
+    minLng >= 121 &&
+    maxLng <= 127 &&
+    minLat >= 21 &&
+    maxLat <= 27;
+  if(!inMainSouthChinaSea && !inTaiwanEastDash) return false;
+
+  if(metrics.closed) return false;
+  if(metrics.pathLength < 0.35 || metrics.pathLength > 18) return false;
+  if(metrics.width > 12 || metrics.height > 12) return false;
+  if(metrics.diagonal > 0 && metrics.pathLength / metrics.diagonal > 2.2) return false;
+  return true;
 }
 
 function toProvinceFeature(district){

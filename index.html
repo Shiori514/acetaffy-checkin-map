@@ -468,7 +468,7 @@ function tooltipFormatter(params){
 function showCityTip(chart, city){
   const cityIndex = chart.__pointIndex?.get(city);
   if(cityIndex !== undefined){
-    chart.dispatchAction({type:'showTip', seriesIndex:1, dataIndex:cityIndex});
+    chart.dispatchAction({type:'showTip', seriesIndex:chart.__pointSeriesIndex ?? 1, dataIndex:cityIndex});
   }
 }
 
@@ -493,6 +493,28 @@ async function fetchChinaGeoJson(){
   return payload;
 }
 
+function buildSouthChinaSeaLineData(collection){
+  const features = collection?.features || [];
+  return features.flatMap((feature, index) => {
+    const geometry = feature.geometry || {};
+    if(geometry.type === 'LineString'){
+      return [{
+        name:feature.properties?.name || '南海十段线',
+        coords:geometry.coordinates,
+        value:index
+      }];
+    }
+    if(geometry.type === 'MultiLineString'){
+      return geometry.coordinates.map((coords, partIndex) => ({
+        name:feature.properties?.name || '南海十段线',
+        coords,
+        value:`${index}-${partIndex}`
+      }));
+    }
+    return [];
+  });
+}
+
 async function initChart(){
   const chinaGeoJson = await fetchChinaGeoJson();
   echarts.registerMap(CHINA_MAP_NAME, chinaGeoJson);
@@ -501,6 +523,7 @@ async function initChart(){
   const provinceRegionData = buildProvinceRegionData();
   const pointData = buildPointData();
   const hitAreaData = buildHitAreaData(pointData);
+  const southChinaSeaLineData = buildSouthChinaSeaLineData(chinaGeoJson.southChinaSeaLines);
   const pointIndex = new Map(pointData.map((item, index) => [item.city, index]));
 
   const option = {
@@ -517,6 +540,7 @@ async function initChart(){
       roam:true,
       zoom:1.18,
       scaleLimit:{min:.8,max:8},
+      boundingCoords:[[73,3],[136,54]],
       regions:provinceRegionData,
       label:{show:false},
       itemStyle:{areaColor:'#fffafd',borderColor:'#ffb6d0',borderWidth:1},
@@ -536,6 +560,18 @@ async function initChart(){
         emphasis:{label:{show:false},itemStyle:{areaColor:'#fff0f6'}},
         z:1,
         tooltip:{show:true}
+      },
+      {
+        name:'南海十段线',
+        type:'lines',
+        coordinateSystem:'geo',
+        polyline:true,
+        data:southChinaSeaLineData,
+        symbol:'none',
+        silent:true,
+        lineStyle:{color:'#e50057',width:1.2,type:'dashed',opacity:.72},
+        z:4,
+        tooltip:{show:false}
       },
       {
         name:'打卡城市',
@@ -566,6 +602,7 @@ async function initChart(){
 
   chart.setOption(option);
   chart.__pointIndex = pointIndex;
+  chart.__pointSeriesIndex = 2;
   chart.on('click', (params) => {
     const city = params.data?.city || normalizeName(params.name);
     if(CHECKIN_DATA[city]) openPanel(city);
