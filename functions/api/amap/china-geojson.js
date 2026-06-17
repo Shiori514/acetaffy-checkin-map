@@ -1,29 +1,36 @@
 const AMAP_DISTRICT_ENDPOINT = 'https://restapi.amap.com/v3/config/district';
 const CHINA_ADCODE = '100000';
-const CACHE_SECONDS = 60 * 60 * 24;
-const EDGE_CACHE_SECONDS = CACHE_SECONDS * 7;
+const R2_BINDING_NAME = 'AMAP_GEOJSON_BUCKET';
+const R2_GEOJSON_KEY = 'amap/china-geojson.json';
+const R2_META_KEY = 'amap/china-geojson-meta.json';
+const SOURCE_REFRESH_INTERVAL_SECONDS = 60 * 60 * 24;
+const REFRESH_ERROR_BACKOFF_SECONDS = 60 * 60;
+const EDGE_CACHE_SECONDS = 60 * 60;
+const BROWSER_CACHE_SECONDS = 60 * 5;
 
 export async function onRequest(context){
   if(context.request.method !== 'GET'){
     return json({error:'Method Not Allowed'}, 405, {Allow:'GET'});
   }
 
-  const {AMAP_KEY, AMAP_SECRET} = context.env;
-  if(!AMAP_KEY || !AMAP_SECRET){
-    return json({error:'AMAP_KEY and AMAP_SECRET are required'}, 500);
-  }
-
-  const cacheKey = new Request(new URL(context.request.url).origin + '/api/amap/china-geojson?v=1');
+  const cacheKey = new Request(new URL(context.request.url).origin + '/api/amap/china-geojson?v=2');
   const cache = typeof caches !== 'undefined' ? caches.default : null;
 
   try{
     const cached = cache ? await cache.match(cacheKey) : null;
     if(cached) return cached;
 
-    const geoJson = await buildChinaGeoJson(AMAP_KEY, AMAP_SECRET);
-    const response = json(geoJson, 200, {
-      'Cache-Control': `public, max-age=${CACHE_SECONDS}, s-maxage=${EDGE_CACHE_SECONDS}, stale-while-revalidate=${EDGE_CACHE_SECONDS}`
-    });
+    const bucket = context.env[R2_BINDING_NAME] || null;
+    const result = bucket
+      ? await getGeoJsonWithR2Cache(context, bucket)
+      : {
+        geoJson:await refreshChinaGeoJson(context.env),
+        cacheStatus:'edge-only'
+      };
+
+    const response = json(result.geoJson, 200, cacheHeaders({
+      'X-Map-Cache':result.cacheStatus
+    }));
     if(cache) context.waitUntil(cache.put(cacheKey, response.clone()));
     return response;
   }catch(err){
@@ -31,6 +38,76 @@ export async function onRequest(context){
       'Cache-Control':'no-store'
     });
   }
+}
+
+async function getGeoJsonWithR2Cache(context, bucket){
+  const [cachedGeoJson, meta] = await Promise.all([
+    readR2Json(bucket, R2_GEOJSON_KEY),
+    readR2Json(bucket, R2_META_KEY)
+  ]);
+
+  if(cachedGeoJson && isFresh(meta?.checkedAt, SOURCE_REFRESH_INTERVAL_SECONDS)){
+    return {geoJson:cachedGeoJson, cacheStatus:'r2-hit'};
+  }
+
+  if(cachedGeoJson && isFresh(meta?.nextRetryAt, 0)){
+    return {geoJson:cachedGeoJson, cacheStatus:'r2-stale-backoff'};
+  }
+
+  try{
+    const nextGeoJson = await refreshChinaGeoJson(context.env);
+    const sourceHash = await hashGeoJsonSource(nextGeoJson);
+    const now = new Date().toISOString();
+
+    if(cachedGeoJson && meta?.sourceHash === sourceHash){
+      await writeR2Meta(bucket, {
+        ...meta,
+        checkedAt:now,
+        lastUnchangedAt:now,
+        nextRetryAt:null,
+        lastError:null,
+        refreshIntervalSeconds:SOURCE_REFRESH_INTERVAL_SECONDS
+      });
+      return {geoJson:cachedGeoJson, cacheStatus:'r2-revalidated-unchanged'};
+    }
+
+    await bucket.put(R2_GEOJSON_KEY, JSON.stringify(nextGeoJson), {
+      httpMetadata:{contentType:'application/json; charset=utf-8'}
+    });
+    await writeR2Meta(bucket, {
+      sourceHash,
+      checkedAt:now,
+      storedAt:now,
+      generatedAt:nextGeoJson.generatedAt,
+      featureCount:nextGeoJson.features?.length || 0,
+      warningCount:nextGeoJson.warnings?.length || 0,
+      nextRetryAt:null,
+      lastError:null,
+      refreshIntervalSeconds:SOURCE_REFRESH_INTERVAL_SECONDS
+    });
+
+    return {geoJson:nextGeoJson, cacheStatus:cachedGeoJson ? 'r2-refreshed-changed' : 'r2-miss-stored'};
+  }catch(err){
+    if(!cachedGeoJson) throw err;
+
+    const now = new Date().toISOString();
+    await writeR2Meta(bucket, {
+      ...meta,
+      lastErrorAt:now,
+      lastError:err.message || 'Failed to refresh AMap district data',
+      nextRetryAt:new Date(Date.now() + REFRESH_ERROR_BACKOFF_SECONDS * 1000).toISOString(),
+      refreshIntervalSeconds:SOURCE_REFRESH_INTERVAL_SECONDS
+    });
+    return {geoJson:cachedGeoJson, cacheStatus:'r2-stale-refresh-error'};
+  }
+}
+
+async function refreshChinaGeoJson(env){
+  const {AMAP_KEY, AMAP_SECRET} = env;
+  if(!AMAP_KEY){
+    throw new Error('AMAP_KEY is required to refresh AMap district data');
+  }
+  return buildChinaGeoJson(AMAP_KEY, AMAP_SECRET || '');
 }
 
 async function buildChinaGeoJson(key, secret){
@@ -84,22 +161,25 @@ async function buildChinaGeoJson(key, secret){
     name:'amap-china-provinces',
     source:'amap',
     generatedAt:new Date().toISOString(),
+    refreshIntervalSeconds:SOURCE_REFRESH_INTERVAL_SECONDS,
     warnings,
     features
   };
 }
 
 async function fetchDistrict(key, secret, params){
-  const jscodeResult = await fetchDistrictOnce(key, secret, params, 'jscode');
-  if(jscodeResult.data.status === '1') return jscodeResult.data;
+  const authModes = secret ? ['key', 'jscode', 'sig'] : ['key'];
+  const results = [];
 
-  const signedResult = await fetchDistrictOnce(key, secret, params, 'sig');
-  if(signedResult.data.status === '1') return signedResult.data;
+  for(const authMode of authModes){
+    const result = await fetchDistrictOnce(key, secret, params, authMode);
+    if(result.data.status === '1') return result.data;
+    results.push(result);
+  }
 
   throw new Error([
     'AMap district API failed',
-    `jscode=${formatAmapError(jscodeResult.data)}`,
-    `sig=${formatAmapError(signedResult.data)}`
+    ...results.map(result => `${result.authMode}=${formatAmapError(result.data)}`)
   ].join('; '));
 }
 
@@ -142,6 +222,54 @@ function signingSource(params, secret){
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([name, value]) => `${name}=${value}`);
   return `${pairs.join('&')}${secret}`;
+}
+
+async function readR2Json(bucket, key){
+  const object = await bucket.get(key);
+  if(!object) return null;
+
+  try{
+    return JSON.parse(await object.text());
+  }catch(_err){
+    return null;
+  }
+}
+
+async function writeR2Meta(bucket, meta){
+  await bucket.put(R2_META_KEY, JSON.stringify(meta), {
+    httpMetadata:{contentType:'application/json; charset=utf-8'}
+  });
+}
+
+function isFresh(value, ttlSeconds){
+  const timestamp = Date.parse(value || '');
+  if(!Number.isFinite(timestamp)) return false;
+  if(ttlSeconds === 0) return timestamp > Date.now();
+  return Date.now() - timestamp < ttlSeconds * 1000;
+}
+
+async function hashGeoJsonSource(geoJson){
+  const sourceText = stableStringify({
+    features:geoJson.features || [],
+    warnings:geoJson.warnings || []
+  });
+  const bytes = new TextEncoder().encode(sourceText);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest))
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function stableStringify(value){
+  if(Array.isArray(value)){
+    return `[${value.map(stableStringify).join(',')}]`;
+  }
+  if(value && typeof value === 'object'){
+    return `{${Object.keys(value).sort().map(key => {
+      return `${JSON.stringify(key)}:${stableStringify(value[key])}`;
+    }).join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function toProvinceFeature(district){
@@ -227,6 +355,13 @@ function shortProvinceName(name){
     .replace(/自治区$/, '')
     .replace(/[省市]$/, '')
     .trim();
+}
+
+function cacheHeaders(headers = {}){
+  return {
+    'Cache-Control': `public, max-age=${BROWSER_CACHE_SECONDS}, s-maxage=${EDGE_CACHE_SECONDS}, stale-while-revalidate=${SOURCE_REFRESH_INTERVAL_SECONDS}`,
+    ...headers
+  };
 }
 
 function json(body, status = 200, headers = {}){
