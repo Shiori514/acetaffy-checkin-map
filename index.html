@@ -438,6 +438,32 @@ function buildProvinceRegionData(){
   });
 }
 
+function buildMapRegionData(){
+  return [
+    ...buildProvinceRegionData(),
+    {
+      name:'南海十段线',
+      value:0,
+      itemStyle:{
+        areaColor:'#e50057',
+        borderColor:'#e50057',
+        borderWidth:.5,
+        opacity:.72
+      },
+      emphasis:{
+        disabled:true,
+        label:{show:false},
+        itemStyle:{
+          areaColor:'#e50057',
+          borderColor:'#e50057',
+          opacity:.82
+        }
+      },
+      tooltip:{show:false}
+    }
+  ];
+}
+
 function buildPointData(){
   return cityNames.map(city => ({
     name: city,
@@ -459,6 +485,7 @@ function provinceTooltip(province, cities){
 }
 
 function tooltipFormatter(params){
+  if(params.name === '南海十段线') return '';
   const city = params.data?.city || normalizeName(params.name);
   if(CHECKIN_DATA[city]) return cityTooltip(city);
   if(params.data?.cities?.length) return provinceTooltip(params.name || '', params.data.cities);
@@ -472,7 +499,7 @@ function showCityTip(chart, city){
   }
 }
 
-const CHINA_MAP_NAME = 'amap-china';
+const CHINA_MAP_NAME = 'aliyun-china';
 const CHINA_GEOJSON_URL = '/api/amap/china-geojson';
 
 async function fetchChinaGeoJson(){
@@ -485,10 +512,10 @@ async function fetchChinaGeoJson(){
   }
 
   if(!response.ok){
-    throw new Error(payload?.error || `高德边界数据接口请求失败（HTTP ${response.status}）`);
+    throw new Error(payload?.error || `阿里云 GeoJSON 接口请求失败（HTTP ${response.status}）`);
   }
   if(payload?.type !== 'FeatureCollection' || !Array.isArray(payload.features)){
-    throw new Error('高德边界数据格式不正确');
+    throw new Error('阿里云 GeoJSON 数据格式不正确');
   }
   return payload;
 }
@@ -520,7 +547,7 @@ async function initChart(){
   echarts.registerMap(CHINA_MAP_NAME, chinaGeoJson);
 
   const chart = echarts.init($('map'), null, {renderer:'canvas'});
-  const provinceRegionData = buildProvinceRegionData();
+  const mapRegionData = buildMapRegionData();
   const pointData = buildPointData();
   const hitAreaData = buildHitAreaData(pointData);
   const southChinaSeaLineData = buildSouthChinaSeaLineData(chinaGeoJson.southChinaSeaLines);
@@ -541,7 +568,7 @@ async function initChart(){
       zoom:1.18,
       scaleLimit:{min:.8,max:8},
       boundingCoords:[[73,3],[136,54]],
-      regions:provinceRegionData,
+      regions:mapRegionData,
       label:{show:false},
       itemStyle:{areaColor:'#fffafd',borderColor:'#ffb6d0',borderWidth:1},
       emphasis:{label:{show:false},itemStyle:{areaColor:'#fff0f6'}},
@@ -553,7 +580,7 @@ async function initChart(){
         type:'map',
         map:CHINA_MAP_NAME,
         geoIndex:0,
-        data:provinceRegionData,
+        data:mapRegionData,
         selectedMode:false,
         label:{show:false},
         itemStyle:{areaColor:'#fffafd',borderColor:'#ffb6d0',borderWidth:1},
@@ -637,7 +664,7 @@ async function initChart(){
     });
     $('backBtn').onclick = emptyPanel;
   }catch(err){
-    $('loading').innerHTML = `地图加载失败：${escapeHtml(err.message)}<br><small>请检查 Cloudflare Pages 环境变量 AMAP_KEY / AMAP_SECRET，以及 /api/amap/china-geojson 函数。</small>`;
+    $('loading').innerHTML = `地图加载失败：${escapeHtml(err.message)}<br><small>请检查 /api/amap/china-geojson 函数和 Cloudflare R2 绑定。</small>`;
   }
 })();
 </script>
