@@ -210,8 +210,9 @@
 <div class="notice-modal" id="delayNotice" role="dialog" aria-modal="true" aria-labelledby="delayNoticeTitle">
   <div class="notice-card">
     <div class="notice-icon" aria-hidden="true">⚠️</div>
-    <h2 id="delayNoticeTitle">南昌点位延期通知</h2>
+    <h2 id="delayNoticeTitle">重要通知</h2>
     <p>因突发技术故障，南昌赣电九方购物中心的大屏投放暂时无法播放，延迟时间待定。<br><br>给各位雏草姬造成的不便，我们表示深深的歉意。<br><br>2026年6月21日</p>
+    <p>南京大屏因技术原因调整了位置，详情请在地图预览。</p>
     <button class="notice-confirm" id="delayNoticeConfirm" type="button" autofocus>我知道了</button>
   </div>
 </div>
@@ -256,7 +257,11 @@ const CHECKIN_DATA = {
   },
   '南京': {
     coord:[118.7969,32.0603],
-    malls:[{name:'南京锦创书城珠江路店', positions:["外景门头屏"], date:'2026.6.26', time:'10:00-21:00'}]
+    malls:[
+      {name:'锦创书城（仙林店）', positions:['待定'], date:'2026.6.26', time:'10:00-21:00'},
+      {name:'锦创书城（珠江路店）', positions:['待定'], date:'2026.6.26', time:'10:00-21:00'},
+      {name:'锦创书城（颐和STATION店）', positions:['待定'], date:'2026.6.26', time:'10:00-21:00'}
+    ]
   },
   '北京': {
     coord:[116.4074,39.9042],
