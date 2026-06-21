@@ -122,6 +122,10 @@
       background:#fff0f6;color:var(--pink2);border:1px solid var(--line);
       border-radius:999px;padding:5px 9px;margin-top:9px;font-size:12px;font-weight:900
     }
+    .tag.warning{
+      background:#fff8df;color:#8a5a00;border-color:#ffd36a;
+      border-radius:12px;line-height:1.5
+    }
     .empty-state{
       padding:28px 20px;text-align:center;color:var(--muted);font-weight:800;line-height:1.8
     }
@@ -276,7 +280,7 @@ const CHECKIN_DATA = {
   },
   '南昌': {
     coord:[115.8582,28.6820],
-    malls:[{name:'南昌赣电九方购物中心', positions:['1号门外大屏'], date:'2026.6.26', time:'18:00-22:00'}]
+    malls:[{name:'南昌赣电九方购物中心', positions:['1号门外大屏'], date:'2026.6.26', time:'18:00-22:00', warning:'该打卡点位由于意外原因延期播放，具体内容待通知'}]
   },
   '沈阳': {
     coord:[123.4315,41.8057],
@@ -324,8 +328,11 @@ function hasFreebie(city){
 function hasOfflineCheckin(city){
   return CHECKIN_DATA[city]?.malls.some(m => /线下打卡点/.test(m.note || ''));
 }
+function hasWarning(city){
+  return CHECKIN_DATA[city]?.malls.some(m => Boolean(m.warning));
+}
 function cityBadges(city){
-  return `${hasFreebie(city) ? ' ✨' : ''}${hasOfflineCheckin(city) ? ' 📝' : ''}`;
+  return `${hasWarning(city) ? ' ⚠️' : ''}${hasFreebie(city) ? ' ✨' : ''}${hasOfflineCheckin(city) ? ' 📝' : ''}`;
 }
 function cityDisplayName(city){
   return `${city}${cityBadges(city)}`;
@@ -356,14 +363,14 @@ function cityTooltip(city){
   const item = CHECKIN_DATA[city];
   if(!item) return '';
   const malls = item.malls.map(m => `<li>${escapeHtml(m.name)}</li>`).join('');
-  return `<div class="tooltip"><div class="t-title">${escapeHtml(city)} · ${item.malls.length} 个点位</div><ul>${malls}</ul><div style="margin-top:8px;color:#946175">点击查看详情</div></div>`;
+  return `<div class="tooltip"><div class="t-title">${escapeHtml(cityDisplayName(city))} · ${item.malls.length} 个点位</div><ul>${malls}</ul><div style="margin-top:8px;color:#946175">点击查看详情</div></div>`;
 }
 function openPanel(city){
   const item = CHECKIN_DATA[city];
   if(!item) return;
   $('panel').classList.remove('empty');
   $('backBtn').hidden = false;
-  $('panelTitle').textContent = city;
+  $('panelTitle').textContent = cityDisplayName(city);
   $('panelMeta').textContent = `${item.malls.length} 个可打卡商场 / 点位`;
   $('panelBody').innerHTML = item.malls.map(m => `
     <article class="mall">
@@ -374,6 +381,7 @@ function openPanel(city){
         <div class="k">时间</div><div class="v">${escapeHtml(m.time)}</div>
       </div>
       ${m.note ? `<div class="tag">✨ ${escapeHtml(m.note)}</div>` : ''}
+      ${m.warning ? `<div class="tag warning">⚠️ ${escapeHtml(m.warning)}</div>` : ''}
     </article>
   `).join('');
 }
