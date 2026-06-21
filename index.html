@@ -138,6 +138,24 @@
     .tooltip .t-title{font-weight:950;color:#e50057;font-size:16px;margin-bottom:6px}
     .tooltip ul{padding-left:18px;margin:6px 0 0}
     .tooltip li{margin:3px 0}
+    .notice-modal{
+      position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:20px;
+      background:rgba(91,25,48,.38);backdrop-filter:blur(8px)
+    }
+    .notice-modal[hidden]{display:none}
+    .notice-card{
+      width:min(440px,100%);padding:26px;text-align:center;
+      background:#fffafc;border:2px solid #ffd36a;border-radius:26px;
+      box-shadow:0 24px 70px rgba(91,25,48,.28)
+    }
+    .notice-icon{font-size:42px;line-height:1;margin-bottom:12px}
+    .notice-card h2{margin:0;color:#a5062c;font-size:24px}
+    .notice-card p{margin:12px 0 20px;color:#6f3e24;font-weight:800;line-height:1.75}
+    .notice-confirm{
+      border:0;border-radius:999px;padding:10px 24px;cursor:pointer;
+      background:var(--pink2);color:#fff;font-size:15px;font-weight:900;
+      box-shadow:0 10px 24px rgba(229,0,87,.22)
+    }
     @media (max-width: 900px){
       body{overflow:auto}
       .app{min-height:100vh;height:auto}
@@ -187,6 +205,15 @@
       </div>
     </aside>
   </main>
+</div>
+
+<div class="notice-modal" id="delayNotice" role="dialog" aria-modal="true" aria-labelledby="delayNoticeTitle">
+  <div class="notice-card">
+    <div class="notice-icon" aria-hidden="true">⚠️</div>
+    <h2 id="delayNoticeTitle">南昌点位延期通知</h2>
+    <p>南昌打卡点位由于意外原因延期播放，具体内容待通知。</p>
+    <button class="notice-confirm" id="delayNoticeConfirm" type="button" autofocus>我知道了</button>
+  </div>
 </div>
 
 <script>
@@ -309,6 +336,10 @@ const CHECKIN_DATA = {
 };
 
 const $ = (id) => document.getElementById(id);
+const delayNotice = $('delayNotice');
+$('delayNoticeConfirm').addEventListener('click', () => {
+  delayNotice.hidden = true;
+});
 const cityNames = Object.keys(CHECKIN_DATA);
 $('panelMeta').textContent = `当前共 ${cityNames.length} 个城市有打卡点`;
 $('cityList').innerHTML = cityNames.map(renderCityChip).join('');
@@ -434,6 +465,7 @@ function buildProvinceRegionData(){
   });
 
   return Array.from(provinceCities, ([province, cities]) => {
+    const isJiangxi = province === '江西';
     return {
       name: province,
       cities,
@@ -443,7 +475,18 @@ function buildProvinceRegionData(){
         borderColor:'rgba(255,155,192,.55)',
         borderWidth:.9,
         shadowBlur:0,
-        shadowColor:'rgba(229,0,87,.26)'
+        shadowColor:'rgba(229,0,87,.26)',
+        ...(isJiangxi ? {
+          decal:{
+            symbol:'rect',
+            symbolSize:1,
+            color:'rgba(255,255,255,.96)',
+            backgroundColor:'#ffeaf2',
+            dashArrayX:[1,0],
+            dashArrayY:[4,3],
+            rotation:-Math.PI / 4
+          }
+        } : {})
       },
       emphasis: {
         itemStyle: {
