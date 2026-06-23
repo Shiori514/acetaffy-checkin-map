@@ -144,14 +144,21 @@
     }
     .notice-modal[hidden]{display:none}
     .notice-card{
-      width:min(440px,100%);padding:26px;text-align:center;
+      width:min(520px,100%);padding:26px;text-align:center;
       background:#fffafc;border:2px solid #ffd36a;border-radius:26px;
       box-shadow:0 24px 70px rgba(91,25,48,.28)
     }
     .notice-icon{font-size:42px;line-height:1;margin-bottom:12px}
     .notice-card h2{margin:0;color:#a5062c;font-size:24px}
-    .notice-card p{margin:12px 0 20px;color:#6f3e24;font-weight:800;line-height:1.75}
-    .notice-divider{color:var(--pink2);font-size:22px;font-weight:900;letter-spacing:.3em}
+    .notice-frame{
+      max-height:min(54vh,460px);margin:16px 0 20px;padding:16px 18px;overflow-y:auto;
+      text-align:left;background:#fff;border:1px solid #ffd4e4;border-radius:16px;
+      box-shadow:inset 0 2px 8px rgba(229,0,87,.06)
+    }
+    .notice-item p{margin:0;color:#6f3e24;font-weight:800;line-height:1.75}
+    .notice-item p + p{margin-top:10px}
+    .notice-date{text-align:right;color:var(--muted)!important}
+    .notice-separator{height:0;margin:16px 0;border:0;border-top:1px solid #efb7ca}
     .notice-confirm{
       border:0;border-radius:999px;padding:10px 24px;cursor:pointer;
       background:var(--pink2);color:#fff;font-size:15px;font-weight:900;
@@ -212,9 +219,21 @@
   <div class="notice-card">
     <div class="notice-icon" aria-hidden="true">⚠️</div>
     <h2 id="delayNoticeTitle">重要通知</h2>
-    <p>因突发技术故障，南昌赣电九方购物中心的大屏投放暂时无法播放，延迟时间待定。<br><br>给各位雏草姬造成的不便，我们表示深深的歉意。<br><br>2026年6月21日</p>
-    <div class="notice-divider" aria-hidden="true">· · ·</div>
-    <p>南京大屏因技术原因调整了位置，详情请在地图预览。</p>
+    <div class="notice-frame">
+      <section class="notice-item">
+        <p>因突发技术故障，南昌赣电九方购物中心的大屏投放暂时无法播放，延迟时间待定。</p>
+        <p>给各位雏草姬造成的不便，我们表示深深的歉意。</p>
+        <p class="notice-date">2026年6月21日</p>
+      </section>
+      <hr class="notice-separator">
+      <section class="notice-item">
+        <p>南京大屏因技术原因调整了位置，详情请在地图预览。</p>
+      </section>
+      <hr class="notice-separator">
+      <section class="notice-item">
+        <p>由于档期原因，上海宝乐汇印象城取消播放。</p>
+      </section>
+    </div>
     <button class="notice-confirm" id="delayNoticeConfirm" type="button" autofocus>我知道了</button>
   </div>
 </div>
@@ -225,8 +244,7 @@ const CHECKIN_DATA = {
   '上海': {
     coord:[121.4737,31.2304],
     malls:[
-      {name:'上海百联ZX创趣场', positions:['入口格栅屏','南立面户外竖屏','电梯厅屏','中庭小屏','户外大屏'], date:'2026.6.22-2026.6.28', time:'10:00-22:00'},
-      {name:'上海宝乐汇印象城', positions:['1号门外立面'], date:'2026.6.24-2026.6.26', time:'10:00-22:00'}
+      {name:'上海百联ZX创趣场', positions:['入口格栅屏','南立面户外竖屏','电梯厅屏','中庭小屏','户外大屏'], date:'2026.6.22-2026.6.28', time:'10:00-22:00'}
     ]
   },
   '重庆': {
